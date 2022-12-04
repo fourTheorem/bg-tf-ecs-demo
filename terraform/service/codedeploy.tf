@@ -3,6 +3,11 @@ resource "aws_codedeploy_app" "ecs" {
   name             = "${var.service_name}-ecs-${var.environment}"
 }
 
+resource "aws_codedeploy_app" "lambda" {
+  compute_platform = "Lambda"
+  name             = "${var.service_name}-lambda-${var.environment}"
+}
+
 resource "aws_iam_role" "codedeploy" {
   name = "${var.service_name}-codedeploy-${var.environment}"
 
@@ -23,6 +28,12 @@ resource "aws_iam_role" "codedeploy" {
 resource "aws_iam_role_policy_attachment" "codedeploy_ecs" {
   role       = aws_iam_role.codedeploy.name
   policy_arn = "arn:aws:iam::aws:policy/AWSCodeDeployRoleForECS"
+  depends_on = [aws_iam_role.codedeploy]
+}
+
+resource "aws_iam_role_policy_attachment" "codedeploy_lambda" {
+  role       = aws_iam_role.codedeploy.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSCodeDeployRoleForLambda"
   depends_on = [aws_iam_role.codedeploy]
 }
 
@@ -70,13 +81,31 @@ resource "aws_codedeploy_deployment_group" "codedeploy_ecs_api" {
       }
 
       target_group {
-        name = aws_lb_target_group.a.name
+        name = aws_lb_target_group.tg["a"].name
       }
 
       target_group {
-        name = aws_lb_target_group.b.name
+        name = aws_lb_target_group.tg["b"].name
       }
     }
+  }
+}
+
+resource "aws_codedeploy_deployment_group" "codedeploy_lambda_ingestors" {
+  for_each              = toset(module.data_ingestor_lambda[*].lambda_function_name)
+  app_name              = aws_codedeploy_app.lambda.name
+  deployment_group_name = each.value
+  service_role_arn      = aws_iam_role.codedeploy.arn
+
+  deployment_config_name = "CodeDeployDefault.LambdaAllAtOnce"
+
+  auto_rollback_configuration {
+    enabled = false
+  }
+
+  deployment_style {
+    deployment_option = "WITH_TRAFFIC_CONTROL"
+    deployment_type   = "BLUE_GREEN"
   }
 }
 
@@ -87,7 +116,7 @@ module "codedeploy_ecs_init_lambda" {
   function_name            = "${var.service_name}-codedeploy-ecs-init-${var.environment}"
   description              = "Initiate a CodeDeploy deployment to the ECS service"
   handler                  = "index-main.handler"
-  runtime                  = "nodejs16.x"
+  runtime                  = "nodejs18.x"
   timeout                  = 30
   architectures            = ["arm64"]
   attach_policy_statements = true
@@ -139,14 +168,19 @@ module "codedeploy_hook_lambda" {
   function_name            = each.value
   description              = "CodeDeploy hook to perform ${each.key} task"
   handler                  = "index-main.handler"
-  runtime                  = "nodejs16.x"
+  runtime                  = "nodejs18.x"
   timeout                  = 900
   architectures            = ["arm64"]
   hash_extra               = each.key
   attach_policy_statements = true
   environment_variables = {
-    LIFECYCLE_EVENT       = each.key
-    ACTIVE_STACK_SSM_NAME = data.aws_ssm_parameter.active_stack.name
+    LIFECYCLE_EVENT        = each.key
+    ACTIVE_STACK_SSM_NAME  = data.aws_ssm_parameter.active_stack.name
+    DYNAMO_DB_TABLE_NAME_A = aws_dynamodb_table.data_table["a"].name
+    DYNAMO_DB_TABLE_NAME_B = aws_dynamodb_table.data_table["b"].name
+    ALB_DNS_NAME           = aws_lb.api.dns_name
+    LIVE_PORT              = aws_lb_listener.api_http.port
+    TEST_PORT              = aws_lb_listener.api_http_testing.port
   }
   policy_statements = {
     codedeploy = {
@@ -155,6 +189,16 @@ module "codedeploy_hook_lambda" {
         "codedeploy:PutLifecycleEventHookExecutionStatus",
       ],
       resources = ["*"]
+    },
+    dynamo = {
+      effect = "Allow",
+      actions = [
+        "dynamodb:DeleteTable",
+      ],
+      resources = [
+        aws_dynamodb_table.data_table["a"].arn,
+        aws_dynamodb_table.data_table["b"].arn
+      ]
     },
     ssm = {
       effect = "Allow",
@@ -225,5 +269,63 @@ resource "aws_cloudformation_stack" "codedeploy_ecs" {
     aws_codedeploy_deployment_group.codedeploy_ecs_api,
     module.codedeploy_hook_lambda,
     module.api_service
+  ]
+}
+
+resource "aws_cloudformation_stack" "codedeploy_lambda" {
+  for_each           = toset(local.stack_refs)
+  name               = module.data_ingestor_lambda[each.value].lambda_function_name
+  timeout_in_minutes = "15"
+
+  template_body = jsonencode({
+    Description = "CodeDeploy Lambda Service deployment initiation by Terraform"
+    Resources = {
+      CodeDeployLambdaInit = {
+        Type = "Custom::ExecuteLambda",
+        Properties = {
+          ServiceToken = module.codedeploy_ecs_init_lambda.lambda_function_arn
+          TargetVersion = each.value == "a" ? (
+            local.next_stack_ref == "a" ? module.data_ingestor_lambda["a"].lambda_function_version : data.aws_lambda_alias.current_live_ingestor_a.function_version
+            ) : (
+            local.next_stack_ref == "b" ? module.data_ingestor_lambda["b"].lambda_function_version : data.aws_lambda_alias.current_live_ingestor_b.function_version
+          )
+          build               = var.build_number
+          functionName        = module.data_ingestor_lambda[each.value].lambda_function_name
+          functionAlias       = var.live_lambda_alias
+          appName             = aws_codedeploy_app.lambda.name
+          hooks               = "[]" # no hooks required on the ingestors since we run all validation on the API codedeploy deployment
+          appName             = aws_codedeploy_app.lambda.name
+          serviceName         = "${var.service_name}-data-ingestor-${var.environment}"
+          deploymentGroupName = module.data_ingestor_lambda[each.value].lambda_function_name
+        }
+      },
+    }
+    Outputs = {
+      deployment = {
+        Value = {
+          "Fn::GetAtt" = [
+            "CodeDeployEcsLambda",
+            "deployment"
+          ]
+        }
+      }
+      build = {
+        Value = {
+          "Fn::GetAtt" = [
+            "CodeDeployEcsLambda",
+            "build"
+          ]
+        }
+      }
+  } })
+
+  lifecycle {
+    ignore_changes = [disable_rollback]
+  }
+
+  depends_on = [
+    aws_codedeploy_deployment_group.codedeploy_lambda_ingestors,
+    module.codedeploy_hook_lambda,
+    module.data_ingestor_lambda
   ]
 }

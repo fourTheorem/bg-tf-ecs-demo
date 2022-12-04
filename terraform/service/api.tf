@@ -3,6 +3,11 @@ variable "api_healthcheck_path" {
   type        = string
   default     = "/health"
 }
+variable "api_container_port" {
+  description = "Port on which the docker container listens"
+  type        = number
+  default     = 8080
+}
 
 locals {
   api_docker_image_url = format(
@@ -33,7 +38,7 @@ module "api_service" {
     DYNAMO_DB_TABLE_NAME_A = aws_dynamodb_table.data_table["a"].name
     DYNAMO_DB_TABLE_NAME_B = aws_dynamodb_table.data_table["b"].name
   })
-  container_port   = 8080
+  container_port   = var.api_container_port
   ulimit_nofile    = 2048
   docker_image_url = local.api_docker_image_url
   memory           = 512
