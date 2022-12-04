@@ -40,3 +40,48 @@ jobs:
             ${{ github.ref }}-build
             ${{ github.ref }}-test
       - run: npm test
+  deploy-bg-dev:
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 18
+      - uses: actions/cache@v3
+        with:
+          path: |
+            node_modules
+            packages/**/dist
+          key: ${{ github.ref }}-deploy-dev
+          restore-keys: |
+            ${{ github.ref }}-build
+            ${{ github.ref }}-test
+            ${{ github.ref }}-deploy-dev
+      - name: setup terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.2.6
+      - name: terraform init
+        working-directory: terraform/deployment
+        run: | # ensure terraform init is run with a remote state, this is just an example
+          terraform init \
+          -input=false \
+          -lock=false
+      - name: terraform apply
+        working-directory: terraform/deployment
+        run: |
+          terraform apply \
+          -var-file="config/dev/terraform.tfvars"\
+          -var="build_number=${{ github.run_id }}" \
+          -var="commit_sha=${GITHUB_SHA:0:10}" \
+          -lock-timeout=3500s \
+          -auto-approve \
+          -input=false
+      - name: wait-for-codeploy-bg-deployment-dev
+        run: |
+          node scripts/wait-ecs-codedeploy.js \
+          --build ${{ github.run_id }} \
+          --stack-name bg-tf-ecs-demo-dev \
+          --env dev
