@@ -1,0 +1,15 @@
+{
+  "name": "bg-tf-ecs-demo-data-ingestor",
+  "version": "0.0.0",
+  "description": "Ingests data random data into a dynamo table",
+  "main": "dist/index-main.cjs",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "checkupdate": "ncu -u",
+    "precompile": "rm -rf dist/* || true",
+    "compile": "webpack-cli --config=webpack.config.cjs",
+    "lint": "tsc --noEmit --skipLibCheck && eslint --ext '.ts' src/",
+    "test": "echo \"run tests from root package\""
+  }
+}
