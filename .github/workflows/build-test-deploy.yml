@@ -1,0 +1,42 @@
+name: Build, Test & Deploy 🚀
+on:
+  push:
+    branches:
+      - main
+concurrency: ci-${{ github.ref}} # ensure only one workflow/deployment runs at a time
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 18
+      - uses: actions/cache@v3
+        with:
+          path: |
+            node_modules
+            packages/**/dist
+          key: ${{ github.ref }}-build
+      - name: install dependencies
+        run: npm ci
+  test:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 18
+      - uses: actions/cache@v3
+        with:
+          path: |
+            node_modules
+            packages/**/dist
+          key: ${{ github.ref }}-test
+          restore-keys: |
+            ${{ github.ref }}-build
+            ${{ github.ref }}-test
+      - run: npm test
