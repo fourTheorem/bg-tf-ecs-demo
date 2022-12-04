@@ -49,6 +49,7 @@ data "aws_lambda_alias" "current_live_ingestor_b" {
 
 resource "aws_cloudwatch_event_rule" "cron" {
   for_each            = toset(local.stack_refs)
+  is_enabled          = true
   name                = "${var.service_name}-data-ingestor-cron-${each.value}-${var.environment}"
   description         = "Schedule for triggering data-ingestor lambda for stack ref ${each.value}"
   schedule_expression = "rate(1 minute)"

@@ -185,6 +185,8 @@ module "codedeploy_hook_lambda" {
     ACTIVE_STACK_SSM_NAME  = data.aws_ssm_parameter.active_stack.name
     DYNAMO_DB_TABLE_NAME_A = aws_dynamodb_table.data_table["a"].name
     DYNAMO_DB_TABLE_NAME_B = aws_dynamodb_table.data_table["b"].name
+    CW_EVENT_RULE_NAME_A   = aws_cloudwatch_event_rule.cron["a"].name
+    CW_EVENT_RULE_NAME_B   = aws_cloudwatch_event_rule.cron["b"].name
     ALB_DNS_NAME           = aws_lb.api.dns_name
     LIVE_PORT              = aws_lb_listener.api_http.port
     TEST_PORT              = aws_lb_listener.api_http_testing.port

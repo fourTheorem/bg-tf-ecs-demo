@@ -3,6 +3,10 @@ import {
   PutLifecycleEventHookExecutionStatusCommand,
 } from '@aws-sdk/client-codedeploy'
 import {
+  CloudWatchEventsClient,
+  DisableRuleCommand,
+} from '@aws-sdk/client-cloudwatch-events'
+import {
   DynamoDBClient,
   DeleteTableCommand,
   waitUntilTableNotExists,
@@ -12,6 +16,8 @@ import delay from 'delay'
 
 import {
   ALB_DNS_NAME,
+  CW_EVENT_RULE_NAME_A,
+  CW_EVENT_RULE_NAME_B,
   DYNAMO_DB_TABLE_NAME_A,
   DYNAMO_DB_TABLE_NAME_B,
   LIFECYCLE_EVENT as lifecycleEvent,
@@ -32,6 +38,7 @@ export interface InvokeEvent {
 
 const codedeploy = new CodeDeploy({})
 const dynamo = new DynamoDBClient({})
+const cwEvents = new CloudWatchEventsClient({})
 
 export const updateCdDeployment = async (
   event: InvokeEvent,
@@ -87,10 +94,23 @@ export async function handler(event: InvokeEvent, ctx: Context) {
     }
 
     if (lifecycleEvent === LifecycleEventName.AfterAllowTraffic) {
-      // delete dynamo table on the stack that is no longer active,
-      // so it can be recreated on the next deployment
+      // This is where you will perform all cleanup tasks
+
+      // get the current active stack
+      // this is the stack that was live before CodeDeploy shifted traffic
+      // to the next stack as we are now in the AfterAllowTraffic hook
       const activeStackRef = await getActiveStackFromSsm()
 
+      // disable the cron job on the stack that is no longer active
+      const ruleToDisable =
+        activeStackRef === StackReference.A
+          ? CW_EVENT_RULE_NAME_A
+          : CW_EVENT_RULE_NAME_B
+
+      await cwEvents.send(new DisableRuleCommand({ Name: ruleToDisable }))
+
+      // delete dynamo table on the stack that is no longer active,
+      // so it can be recreated on the next deployment
       const tableToDelete =
         activeStackRef === StackReference.A
           ? DYNAMO_DB_TABLE_NAME_A
