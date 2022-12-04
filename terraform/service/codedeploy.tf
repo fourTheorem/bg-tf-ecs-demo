@@ -109,12 +109,12 @@ resource "aws_codedeploy_deployment_group" "codedeploy_lambda_ingestors" {
   }
 }
 
-module "codedeploy_ecs_init_lambda" {
+module "codedeploy_init_lambda" {
   source  = "terraform-aws-modules/lambda/aws"
   version = "~> 4.0"
 
-  function_name            = "${var.service_name}-codedeploy-ecs-init-${var.environment}"
-  description              = "Initiate a CodeDeploy deployment to the ECS service"
+  function_name            = "${var.service_name}-codedeploy-init-${var.environment}"
+  description              = "Initiate a CodeDeploy deployment"
   handler                  = "index-main.handler"
   runtime                  = "nodejs18.x"
   timeout                  = 30
@@ -129,6 +129,13 @@ module "codedeploy_ecs_init_lambda" {
         "codedeploy:Get*",
         "codedeploy:List*",
         "codedeploy:RegisterApplicationRevision"
+      ],
+      resources = ["*"]
+    },
+    lambda = {
+      effect = "Allow",
+      actions = [
+        "lambda:GetAlias",
       ],
       resources = ["*"]
     },
@@ -196,8 +203,8 @@ module "codedeploy_hook_lambda" {
         "dynamodb:DeleteTable",
       ],
       resources = [
-        aws_dynamodb_table.data_table["a"].arn,
-        aws_dynamodb_table.data_table["b"].arn
+        "${aws_dynamodb_table.data_table["a"].arn}/*",
+        "${aws_dynamodb_table.data_table["b"].arn}/*"
       ]
     },
     ssm = {
@@ -223,8 +230,9 @@ resource "aws_cloudformation_stack" "codedeploy_ecs" {
       CodeDeployEcsLambda = {
         Type = "Custom::ExecuteLambda",
         Properties = {
-          ServiceToken            = module.codedeploy_ecs_init_lambda.lambda_function_arn
+          ServiceToken            = module.codedeploy_init_lambda.lambda_function_arn
           DeploymentId            = aws_codedeploy_deployment_group.codedeploy_ecs_api.deployment_group_id
+          type                    = "ecs"
           build                   = var.build_number
           appName                 = aws_codedeploy_app.ecs.name
           serviceName             = module.api_service.ecs_service_name
@@ -283,12 +291,13 @@ resource "aws_cloudformation_stack" "codedeploy_lambda" {
       CodeDeployLambdaInit = {
         Type = "Custom::ExecuteLambda",
         Properties = {
-          ServiceToken = module.codedeploy_ecs_init_lambda.lambda_function_arn
+          ServiceToken = module.codedeploy_init_lambda.lambda_function_arn
           TargetVersion = each.value == "a" ? (
             local.next_stack_ref == "a" ? module.data_ingestor_lambda["a"].lambda_function_version : data.aws_lambda_alias.current_live_ingestor_a.function_version
             ) : (
             local.next_stack_ref == "b" ? module.data_ingestor_lambda["b"].lambda_function_version : data.aws_lambda_alias.current_live_ingestor_b.function_version
           )
+          type                = "lambda"
           build               = var.build_number
           functionName        = module.data_ingestor_lambda[each.value].lambda_function_name
           functionAlias       = var.live_lambda_alias

@@ -40,6 +40,7 @@
     "@aws-sdk/client-codedeploy": "^3.223.0",
     "@aws-sdk/client-dynamodb": "^3.223.0",
     "@aws-sdk/client-ecs": "^3.223.0",
+    "@aws-sdk/client-lambda": "^3.223.0",
     "@aws-sdk/client-ssm": "^3.223.0",
     "@aws-sdk/lib-dynamodb": "^3.223.0",
     "@babel/cli": "^7.19.3",

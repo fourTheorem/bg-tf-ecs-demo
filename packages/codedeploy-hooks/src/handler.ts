@@ -8,6 +8,7 @@ import {
   waitUntilTableNotExists,
 } from '@aws-sdk/client-dynamodb'
 import { Context } from 'aws-lambda'
+import delay from 'delay'
 
 import {
   ALB_DNS_NAME,
@@ -76,7 +77,7 @@ export async function handler(event: InvokeEvent, ctx: Context) {
         if (lastResponseCode === 200) {
           break
         } else {
-          await new Promise((resolve) => setTimeout(resolve, 10e3))
+          await delay(10e3)
         }
       }
 
