@@ -1,0 +1,17 @@
+{
+  "name": "bg-tf-ecs-demo-api",
+  "version": "0.0.0",
+  "description": "Simple API that accepts a GET request and returns a response from dynamo",
+  "main": "dist/index-main.cjs",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "checkupdate": "ncu -u",
+    "precompile": "rm -rf dist/* || true",
+    "compile": "webpack-cli --config=webpack.config.cjs",
+    "lint": "tsc --noEmit --skipLibCheck && eslint --ext '.ts' src/",
+    "start": "node dist/index-main.cjs",
+    "start:dev": "ENVIRONMENT=\"dev${USER%.*}\" nodemon -e 'ts' -w ./src --exec sh -c 'npm run compile && node --inspect dist/index-main.cjs'",
+    "test": "echo \"run tests from root package\""
+  }
+}

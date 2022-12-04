@@ -1,0 +1,48 @@
+{
+  "compilerOptions": {
+    "allowJs": true,
+    "allowSyntheticDefaultImports": true,
+    "allowUnreachableCode": false,
+    "allowUnusedLabels": false,
+    "checkJs": true,
+    "declaration": true,
+    "declarationMap": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "importHelpers": true,
+    "incremental": true,
+    "isolatedModules": true,
+    "lib": ["ESNext"],
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "noImplicitAny": true,
+    "resolveJsonModule": true,
+    "sourceMap": true,
+    "strict": true,
+    "strictFunctionTypes": true,
+    "strictNullChecks": true,
+    "target": "ES2019",
+  },
+  "typeAcquisition": {
+    "enable": true
+  },
+  "include": [
+    "**/*.ts",
+    "**/.*.ts",
+    "**/*.js",
+    "**/*.cjs",
+    "**/*.mjs",
+    "**/.*.js",
+    "**/.*.cjs",
+    "**/.*.mjs",
+    "*.js",
+    "*.cjs",
+    "*.mjs",
+    ".*.js",
+    ".*.cjs",
+    ".*.mjs",
+    "*.ts",
+    ".*.ts"
+  ],
+  "exclude": ["node_modules/**", "**/node_modules/**"]
+}
