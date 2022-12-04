@@ -1,0 +1,16 @@
+{
+  "name": "bg-tf-ecs-demo-hooks",
+  "version": "0.0.0",
+  "description": "Runs CodeDeploy ECS hooks",
+  "main": "dist/index-main.cjs",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "checkupdate": "ncu -u",
+    "precompile": "rm -rf dist/* || true",
+    "compile": "webpack-cli --config=webpack.config.cjs",
+    "lint": "tsc --noEmit --skipLibCheck && eslint --ext '.ts' src/",
+    "start": "node dist/index-main.cjs",
+    "test": "echo \"run tests from root package\""
+  }
+}
